@@ -7,7 +7,7 @@ import os
 from huggingface_hub import hf_hub_download
 from transformers import logging
 
-from .classifiers.centroids import CentroidSentenceClassifier
+from .classifiers.centroids import CentroidClassifier
 from .template import Template
 
 logging.set_verbosity_error()
@@ -17,7 +17,7 @@ class ModelTypes:
     CENTROIDS = 'centroids'
 
 
-class SentenceClassifier:
+class Fastc:
     def __new__(
         cls,
         model: str = None,
@@ -49,7 +49,7 @@ class SentenceClassifier:
             template = Template()
 
         if model_type == ModelTypes.CENTROIDS:
-            return CentroidSentenceClassifier(
+            return CentroidClassifier(
                 embeddings_model=embeddings_model,
                 model_data=model_data,
                 template=template,
@@ -71,3 +71,7 @@ class SentenceClassifier:
         with open(file_path, 'r') as model_file:
             model = json.load(model_file)
         return model
+
+
+# Backwards compatibility
+SentenceClassifier = Fastc
