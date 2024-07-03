@@ -3,17 +3,19 @@
 
 import json
 import os
+from enum import Enum
 
 from huggingface_hub import hf_hub_download
 from transformers import logging
 
 from .classifiers.centroids import CentroidClassifier
+from .classifiers.embeddings import Pooling
 from .template import Template
 
 logging.set_verbosity_error()
 
 
-class ModelTypes:
+class ModelTypes(Enum):
     CENTROIDS = 'centroids'
 
 
@@ -22,8 +24,9 @@ class Fastc:
         cls,
         model: str = None,
         embeddings_model: str = None,
-        model_type: str = None,
+        model_type: ModelTypes = None,
         template: str = None,
+        pooling: Pooling = None,
     ):
         model_data = None
 
@@ -33,6 +36,11 @@ class Fastc:
             model_type = model_config['type']
             model_data = model_config['data']
             embeddings_model = model_config['embeddings']
+
+            pooling = model_config.get(
+                'pooling',
+                Pooling.MEAN,  # Backwards compatibility
+            )
 
             if 'template' in model_config:
                 template_text = model_config['template']['text']
@@ -48,11 +56,15 @@ class Fastc:
         if template is None:
             template = Template()
 
+        if pooling is None:
+            pooling = Pooling.DEFAULT
+
         if model_type == ModelTypes.CENTROIDS:
             return CentroidClassifier(
                 embeddings_model=embeddings_model,
                 model_data=model_data,
                 template=template,
+                pooling=pooling,
             )
 
         raise ValueError("Unsupported model type.")

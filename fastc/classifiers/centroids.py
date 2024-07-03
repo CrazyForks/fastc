@@ -9,19 +9,22 @@ import torch
 import torch.nn.functional as F
 
 from ..template import Template
-from .interface import FastcInterface
+from .embeddings import Pooling
+from .interface import ClassifierInterface
 
 
-class CentroidClassifier(FastcInterface):
+class CentroidClassifier(ClassifierInterface):
     def __init__(
         self,
         embeddings_model: str,
+        template: Template,
+        pooling: Pooling,
         model_data: Dict[int, List[float]] = None,
-        template: Template = None,
     ):
         super().__init__(
             embeddings_model=embeddings_model,
             template=template,
+            pooling=pooling,
         )
 
         self._centroids = {}
@@ -39,8 +42,10 @@ class CentroidClassifier(FastcInterface):
             raise ValueError("Dataset is not loaded.")
 
         for label, texts in self._texts_by_label.items():
-            embeddings = list(self.get_embeddings(
-                texts,
+            texts = [self._template.format(text) for text in texts]
+            embeddings = list(self.embeddings_model.get_embeddings(
+                texts=texts,
+                pooling=self._pooling,
                 title='Generating embeddings [{}]'.format(label),
                 show_progress=True,
             ))
@@ -59,7 +64,11 @@ class CentroidClassifier(FastcInterface):
         if not isinstance(texts, list):
             raise TypeError("Input must be a list of strings.")
 
-        texts_embeddings = self.get_embeddings(texts)
+        texts = [self._template.format(text) for text in texts]
+        texts_embeddings = self.embeddings_model.get_embeddings(
+            texts=texts,
+            pooling=self._pooling,
+        )
         normalized_texts_embeddings = [
             self._normalize(embedding)
             for embedding in texts_embeddings
