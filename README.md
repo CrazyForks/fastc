@@ -22,7 +22,7 @@ pip install -U fastc
 # Train a model
 You can train a text classifier with just a few lines of code:
 ```python
-from fastc import SentenceClassifier
+from fastc import Fastc
 
 tuples = [
     ("I just got a promotion! Feeling fantastic.", 'positive'),
@@ -45,15 +45,15 @@ tuples = [
     ("I'm exhausted and overwhelmed with everything.", 'positive'),
 ]
 
-classifier = SentenceClassifier(embeddings_model='microsoft/deberta-base')
-classifier.load_dataset(tuples)
-classifier.train()
+model = Fastc(embeddings_model='microsoft/deberta-base')
+model.load_dataset(tuples)
+model.train()
 ```
 
 # Export a model
 After training, you can save the model for future use:
 ```python
-classifier.save_model('./sentiment-classifier/')
+model.save_model('./sentiment-classifier/')
 ```
 
 # Publish model to HuggingFace
@@ -61,17 +61,22 @@ classifier.save_model('./sentiment-classifier/')
 > Log in to HuggingFace first with `huggingface-cli login`
 
 ```python
-classifier.push_to_hub('brunneis/sentiment-classifier')
+model.push_to_hub(
+    'braindao/sentiment-classifier',
+    tags=['sentiment-analysis'],
+    languages=['multilingual'],
+    private=False,
+)
 ```
 
 # Load an existing model
 You can load a pre-trained model either from a directory or from HuggingFace:
 ```python
 # From a directory
-classifier = SentenceClassifier('./sentiment-classifier/')
+model = Fastc('./sentiment-classifier/')
 
 # From HuggingFace
-classifier = SentenceClassifier('brunneis/sentiment-classifier')
+model = Fastc('brunneis/sentiment-classifier')
 ```
 
 # Class prediction
@@ -82,11 +87,11 @@ sentences = [
 ]
 
 # Single prediction
-scores = classifier.predict_one(sentences[0])
+scores = model.predict_one(sentences[0])
 print(max(scores, key=scores.get))
 
 # Batch predictions
-scores_list = classifier.predict(sentences)
+scores_list = model.predict(sentences)
 for scores in scores_list:
     print(max(scores, key=scores.get))
 ```
@@ -95,12 +100,12 @@ for scores in scores_list:
 You can use instruct templates with instruct models such as `intfloat/multilingual-e5-large-instruct`. Other models may also improve in performance by using templates, even if they were not explicitly trained with them.
 
 ```python
-from fastc import ModelTemplates, SentenceClassifier, Template
+from fastc import ModelTemplates, Fastc, Template
 
 # template_text = 'Instruct: {instruction}\nQuery: {text}'
 template_text = ModelTemplates.E5_INSTRUCT
 
-classifier = SentenceClassifier(
+model = Fastc(
     embeddings_model='intfloat/multilingual-e5-large-instruct',
     template=Template(
         template_text,

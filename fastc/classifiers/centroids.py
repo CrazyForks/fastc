@@ -9,10 +9,10 @@ import torch
 import torch.nn.functional as F
 
 from ..template import Template
-from .interface import SentenceClassifierInterface
+from .interface import FastcInterface
 
 
-class CentroidSentenceClassifier(SentenceClassifierInterface):
+class CentroidClassifier(FastcInterface):
     def __init__(
         self,
         embeddings_model: str,

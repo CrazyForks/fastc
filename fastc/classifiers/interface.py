@@ -5,14 +5,16 @@ import os
 from typing import Dict, Generator, List, Optional, Tuple
 
 import torch
-from huggingface_hub import HfApi, create_repo
+from huggingface_hub import HfApi
 from tqdm import tqdm
 
 from ..template import Template
 from .embeddings import EmbeddingsModel
 
+FASTC_FORMAT_VERSION = 2.0
 
-class SentenceClassifierInterface:
+
+class FastcInterface:
     def __init__(
         self,
         embeddings_model: str,
@@ -74,25 +76,83 @@ class SentenceClassifierInterface:
     def save_model(self, path: str):
         raise NotImplementedError
 
-    def push_to_hub(self, repo_id: str, **kwargs):
-        kwargs['exist_ok'] = True
-        kwargs['repo_type'] = 'model'
-        create_repo(repo_id, **kwargs)
-        config_path = '/tmp/fastc/config.json'
+    @property
+    def _embeddings_model_name(self):
+        return self._embeddings_model._model.name_or_path
+
+    def push_to_hub(
+        self,
+        repo_id: str,
+        tags: List[str] = None,
+        languages: List[str] = None,
+        private: bool = False,
+    ):
+        if tags is None:
+            tags = []
+        tags = ['fastc', 'fastc-{}'.format(FASTC_FORMAT_VERSION)] + tags
+
         self.save_model('/tmp/fastc')
-        HfApi().upload_file(
-            path_or_fileobj=config_path,
-            path_in_repo='config.json',
+
+        api = HfApi()
+
+        api.create_repo(
             repo_id=repo_id,
             repo_type='model',
+            private=private,
+            exist_ok=True,
         )
-        os.remove(config_path)
+
+        readme = (
+            '---\n'
+            'base_model: {}\n'
+        ).format(self._embeddings_model_name)
+
+        if languages is not None:
+            readme += 'language:\n'
+            for language in languages:
+                readme += '- {}\n'.format(language)
+
+        readme += 'tags:\n'
+        for tag in tags:
+            readme += '- {}\n'.format(tag)
+
+        readme += '---\n\n'
+
+        repo_name = repo_id.split('/')[1]
+        readme += (
+            '# {}\n\n'
+            '## Install fastc\n'
+            '```bash\npip install fastc\n```\n\n'
+            '## Model Inference\n'
+            '```python\n'
+            'from fastc import Fastc\n\n'
+            'model = Fastc(\'{}\')\n'
+            'label = model.predict_one(text)[\'label\']\n'
+            '```'
+        ).format(repo_name, repo_id)
+
+        readme_path = '/tmp/fastc/README.md'
+        model_path = '/tmp/fastc/config.json'
+
+        with open(readme_path, 'w') as readme_file:
+            readme_file.write(readme)
+
+        for file_path in [readme_path, model_path]:
+            base_name = os.path.basename(file_path)
+            api.upload_file(
+                repo_id=repo_id,
+                repo_type='model',
+                path_or_fileobj=file_path,
+                path_in_repo=base_name,
+                commit_message='Updated {} via fastc'.format(base_name),
+            )
+            os.remove(file_path)
 
     def _get_info(self):
         return {
-            'version': 2.0,
+            'version': FASTC_FORMAT_VERSION,
             'model': {
-                'embeddings': self._embeddings_model._model.name_or_path,
+                'embeddings': self._embeddings_model_name,
                 'template': {
                     'text': self._template._template,
                     'variables': self._template._variables,

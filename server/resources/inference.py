@@ -4,7 +4,7 @@
 
 from typing import List
 
-from fastc import SentenceClassifier
+from fastc import Fastc
 
 
 class InferenceResource:
@@ -16,7 +16,7 @@ class InferenceResource:
         self._classifiers = {}
         if model_names:
             for model_name in model_names:
-                self._classifiers[model_name] = SentenceClassifier(model_name)
+                self._classifiers[model_name] = Fastc(model_name)
         self._download_on_demand = download_on_demand
 
     def on_post(self, request, response):
@@ -26,11 +26,11 @@ class InferenceResource:
 
         if model_name not in self._classifiers:
             if self._download_on_demand:
-                self._classifiers[model_name] = SentenceClassifier(model_name)
+                self._classifiers[model_name] = Fastc(model_name)
             else:
                 response.status = 404
                 response.media = {
-                    'error': f'Model {model_name} not found.',
+                    'error': 'Model {} not found.'.format(model_name),
                 }
                 return
 
