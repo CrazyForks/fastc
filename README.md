@@ -76,7 +76,7 @@ You can load a pre-trained model either from a directory or from HuggingFace:
 model = Fastc('./sentiment-classifier/')
 
 # From HuggingFace
-model = Fastc('brunneis/sentiment-classifier')
+model = Fastc('braindao/sentiment-classifier')
 ```
 
 # Class prediction
