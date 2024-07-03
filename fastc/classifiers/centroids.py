@@ -39,7 +39,8 @@ class CentroidClassifier(FastcInterface):
             raise ValueError("Dataset is not loaded.")
 
         for label, texts in self._texts_by_label.items():
-            embeddings = list(self.get_embeddings(
+            texts = [self._template.format(text) for text in texts]
+            embeddings = list(self.embeddings_model.get_embeddings(
                 texts,
                 title='Generating embeddings [{}]'.format(label),
                 show_progress=True,
@@ -59,7 +60,8 @@ class CentroidClassifier(FastcInterface):
         if not isinstance(texts, list):
             raise TypeError("Input must be a list of strings.")
 
-        texts_embeddings = self.get_embeddings(texts)
+        texts = [self._template.format(text) for text in texts]
+        texts_embeddings = self.embeddings_model.get_embeddings(texts)
         normalized_texts_embeddings = [
             self._normalize(embedding)
             for embedding in texts_embeddings

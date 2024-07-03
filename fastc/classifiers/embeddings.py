@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from typing import Generator, List, Optional
+
+import torch
+from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
 
@@ -22,10 +26,30 @@ class EmbeddingsModel:
             self._model.eval()
             self._initialized = True
 
-    @property
-    def tokenizer(self):
-        return self._tokenizer
+    @torch.no_grad()
+    def get_embeddings(
+        self,
+        texts: List[str],
+        title: Optional[str] = None,
+        show_progress: bool = False,
+    ) -> Generator[torch.Tensor, None, None]:
+        for text in tqdm(
+            texts,
+            desc=title,
+            unit='text',
+            disable=not show_progress,
+        ):
+            inputs = self._tokenizer(
+                text,
+                return_tensors='pt',
+                padding=True,
+                truncation=True,
+            )
+            outputs = self._model(**inputs)
 
-    @property
-    def model(self):
-        return self._model
+            token_embeddings = outputs.last_hidden_state[0]
+            sentence_embedding = torch.mean(
+                token_embeddings,
+                dim=0,
+            )
+            yield sentence_embedding

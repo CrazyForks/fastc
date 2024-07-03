@@ -2,11 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import os
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Dict, Generator, List, Tuple
 
-import torch
 from huggingface_hub import HfApi
-from tqdm import tqdm
 
 from ..template import Template
 from .embeddings import EmbeddingsModel
@@ -36,33 +34,9 @@ class FastcInterface:
 
         self._texts_by_label = texts_by_label
 
-    @torch.no_grad()
-    def get_embeddings(
-        self,
-        texts: List[str],
-        title: Optional[str] = None,
-        show_progress: bool = False,
-    ) -> Generator[torch.Tensor, None, None]:
-        for text in tqdm(
-            texts,
-            desc=title,
-            unit='text',
-            disable=not show_progress,
-        ):
-            inputs = self._embeddings_model.tokenizer(
-                self._template.format(text),
-                return_tensors='pt',
-                padding=True,
-                truncation=True,
-            )
-            outputs = self._embeddings_model.model(**inputs)
-
-            token_embeddings = outputs.last_hidden_state[0]
-            sentence_embedding = torch.mean(
-                token_embeddings,
-                dim=0,
-            )
-            yield sentence_embedding
+    @property
+    def embeddings_model(self):
+        return self._embeddings_model
 
     def train(self):
         raise NotImplementedError
