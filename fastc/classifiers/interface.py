@@ -7,19 +7,27 @@ from typing import Dict, Generator, List, Tuple
 from huggingface_hub import HfApi
 
 from ..template import Template
-from .embeddings import EmbeddingsModel
+from .embeddings import ATTENTION_POOLING_STRATEGIES, EmbeddingsModel, Pooling
 
 FASTC_FORMAT_VERSION = 2.0
 
 
-class FastcInterface:
+class ClassifierInterface:
     def __init__(
         self,
         embeddings_model: str,
-        template: Template = None,
+        template: Template,
+        pooling: Pooling,
     ):
-        self._embeddings_model = EmbeddingsModel(embeddings_model)
+        output_attentions = False
+        if pooling in ATTENTION_POOLING_STRATEGIES:
+            output_attentions = True
+        self._embeddings_model = EmbeddingsModel(
+            embeddings_model,
+            output_attentions=output_attentions,
+        )
         self._template = template
+        self._pooling = pooling
         self._texts_by_label = None
 
     def load_dataset(self, dataset: List[Tuple[str, int]]):
@@ -127,6 +135,7 @@ class FastcInterface:
             'version': FASTC_FORMAT_VERSION,
             'model': {
                 'embeddings': self._embeddings_model_name,
+                'pooling': self._pooling.value,
                 'template': {
                     'text': self._template._template,
                     'variables': self._template._variables,
