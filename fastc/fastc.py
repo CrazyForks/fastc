@@ -33,7 +33,11 @@ class Fastc:
         if model is not None:
             config = cls._get_config(model)
             model_config = config['model']
+            
             model_type = model_config['type']
+            if model_type == ModelTypes.CENTROIDS.value:
+                model_type = ModelTypes.CENTROIDS
+            
             model_data = model_config['data']
             embeddings_model = model_config['embeddings']
 
