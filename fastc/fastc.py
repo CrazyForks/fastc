@@ -3,20 +3,17 @@
 
 import json
 import os
-from enum import Enum
 
 from huggingface_hub import hf_hub_download
 from transformers import logging
 
 from .classifiers.centroids import CentroidClassifier
 from .classifiers.embeddings import Pooling
+from .classifiers.logistic_regression import LogisticRegressionClassifier
+from .model_types import ModelTypes
 from .template import Template
 
 logging.set_verbosity_error()
-
-
-class ModelTypes(Enum):
-    CENTROIDS = 'centroids'
 
 
 class Fastc:
@@ -29,22 +26,27 @@ class Fastc:
         pooling: Pooling = None,
     ):
         model_data = None
+        label_names_by_id = None
 
         if model is not None:
             config = cls._get_config(model)
             model_config = config['model']
-            
-            model_type = model_config['type']
-            if model_type == ModelTypes.CENTROIDS.value:
-                model_type = ModelTypes.CENTROIDS
-            
+
+            model_type = ModelTypes.from_value(model_config['type'])
             model_data = model_config['data']
             embeddings_model = model_config['embeddings']
 
-            pooling = model_config.get(
+            labels = model_config.get('labels')
+            if labels is None:
+                # Backwards compatibility
+                label_names_by_id = {label: label for label in model_data.keys()}  # noqa: E501
+            else:
+                label_names_by_id = {v: k for k, v in labels.items()}
+
+            pooling = Pooling.from_value(model_config.get(
                 'pooling',
-                Pooling.MEAN,  # Backwards compatibility
-            )
+                Pooling.MEAN.value,  # Backwards compatibility
+            ))
 
             if 'template' in model_config:
                 template_text = model_config['template']['text']
@@ -63,15 +65,21 @@ class Fastc:
         if pooling is None:
             pooling = Pooling.DEFAULT
 
-        if model_type == ModelTypes.CENTROIDS:
-            return CentroidClassifier(
-                embeddings_model=embeddings_model,
-                model_data=model_data,
-                template=template,
-                pooling=pooling,
-            )
+        classifier_kwargs = {
+            'embeddings_model': embeddings_model,
+            'model_data': model_data,
+            'template': template,
+            'pooling': pooling,
+            'label_names_by_id': label_names_by_id,
+        }
 
-        raise ValueError("Unsupported model type.")
+        if model_type == ModelTypes.CENTROIDS:
+            return CentroidClassifier(**classifier_kwargs)
+
+        if model_type == ModelTypes.LOGISTIC_REGRESSION:
+            return LogisticRegressionClassifier(**classifier_kwargs)
+
+        raise ValueError("Unsupported model type {}".format(model_type))
 
     @staticmethod
     def _get_config(model: str):

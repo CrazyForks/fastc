@@ -1,13 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import json
-import os
 from typing import Dict, Generator, List
 
 import torch
 import torch.nn.functional as F
 
+from ..model_types import ModelTypes
 from ..template import Template
 from .embeddings import Pooling
 from .interface import ClassifierInterface
@@ -19,23 +18,31 @@ class CentroidClassifier(ClassifierInterface):
         embeddings_model: str,
         template: Template,
         pooling: Pooling,
+        label_names_by_id: Dict[int, str],
         model_data: Dict[int, List[float]] = None,
     ):
         super().__init__(
             embeddings_model=embeddings_model,
             template=template,
             pooling=pooling,
+            label_names_by_id=label_names_by_id,
         )
 
         self._centroids = {}
         self._normalized_centroids = {}
 
         if model_data is not None:
-            self._load_centroids(model_data)
+            self._load_model(model_data)
 
-    @staticmethod
-    def _normalize(tensor: torch.Tensor) -> torch.Tensor:
-        return F.normalize(tensor, p=2, dim=-1)
+    def _load_model(self, centroids: Dict):
+        self._centroids = {
+            self._label_ids_by_name[label]: torch.tensor(centroid)
+            for label, centroid in centroids.items()
+        }
+        self._normalized_centroids = {
+            label: self._normalize(centroid)
+            for label, centroid in self._centroids.items()
+        }
 
     def train(self):
         if self._texts_by_label is None:
@@ -46,7 +53,9 @@ class CentroidClassifier(ClassifierInterface):
             embeddings = list(self.embeddings_model.get_embeddings(
                 texts=texts,
                 pooling=self._pooling,
-                title='Generating embeddings [{}]'.format(label),
+                title='Generating embeddings [{}]'.format(
+                    self._label_names_by_id[label],
+                ),
                 show_progress=True,
             ))
             embeddings = torch.stack(embeddings)
@@ -57,7 +66,7 @@ class CentroidClassifier(ClassifierInterface):
     def predict(
         self,
         texts: List[str],
-    ) -> Generator[Dict[int, float], None, None]:  # noqa: E501
+    ) -> Generator[Dict[int, float], None, None]:
         if self._normalized_centroids is None:
             raise ValueError("Model is not trained.")
 
@@ -65,16 +74,17 @@ class CentroidClassifier(ClassifierInterface):
             raise TypeError("Input must be a list of strings.")
 
         texts = [self._template.format(text) for text in texts]
-        texts_embeddings = self.embeddings_model.get_embeddings(
+        embeddings = self.embeddings_model.get_embeddings(
             texts=texts,
             pooling=self._pooling,
         )
-        normalized_texts_embeddings = [
+
+        normalized_embeddings = [
             self._normalize(embedding)
-            for embedding in texts_embeddings
+            for embedding in embeddings
         ]
 
-        for text_embedding in normalized_texts_embeddings:
+        for text_embedding in normalized_embeddings:
             dot_products = {
                 label: torch.dot(text_embedding, centroid).item()
                 for label, centroid in self._normalized_centroids.items()
@@ -84,7 +94,7 @@ class CentroidClassifier(ClassifierInterface):
             softmax_scores = F.softmax(dot_product_values, dim=0).tolist()
 
             scores = {
-                label: score
+                self._label_names_by_id[label]: score
                 for label, score in zip(dot_products.keys(), softmax_scores)
             }
 
@@ -95,38 +105,11 @@ class CentroidClassifier(ClassifierInterface):
 
             yield result
 
-    def predict_one(self, text: str) -> Dict[int, float]:
-        return list(self.predict([text]))[0]
-
-    def _load_centroids(self, centroids: Dict):
-        self._centroids = {
-            label: torch.tensor(centroid)
-            for label, centroid in centroids.items()
-        }
-        self._normalized_centroids = {
-            label: self._normalize(centroid)
-            for label, centroid in self._centroids.items()
-        }
-
     def _get_info(self):
         info = super()._get_info()
-        info['model']['type'] = 'centroids'
+        info['model']['type'] = ModelTypes.CENTROIDS.value
         info['model']['data'] = {
-            key: value.tolist()
+            self._label_names_by_id[key]: value.tolist()
             for key, value in self._centroids.items()
         }
         return info
-
-    def save_model(
-        self,
-        path: str,
-        description: str = None,
-    ):
-        os.makedirs(path, exist_ok=True)
-
-        model_info = self._get_info()
-        if description is not None:
-            model_info['description'] = description
-
-        with open(os.path.join(path, 'config.json'), 'w') as f:
-            json.dump(model_info, f, indent=4)
