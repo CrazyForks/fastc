@@ -1,42 +1,61 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import json
-import os
 from typing import Dict, Generator, List
 
 import torch
 import torch.nn.functional as F
 
-from .interface import SentenceClassifierInterface
+from ..kernels import Kernels
+from ..template import Template
+from .embeddings import Pooling
+from .interface import ClassifierInterface
 
 
-class CentroidSentenceClassifier(SentenceClassifierInterface):
+class CentroidClassifier(ClassifierInterface):
     def __init__(
         self,
         embeddings_model: str,
-        model: Dict[int, List[float]] = None,
+        template: Template,
+        pooling: Pooling,
+        label_names_by_id: Dict[int, str],
+        model_data: Dict[int, List[float]] = None,
     ):
-        super().__init__(embeddings_model)
+        super().__init__(
+            embeddings_model=embeddings_model,
+            template=template,
+            pooling=pooling,
+            label_names_by_id=label_names_by_id,
+        )
 
         self._centroids = {}
         self._normalized_centroids = {}
 
-        if model is not None:
-            self._load_centroids(model)
+        if model_data is not None:
+            self._load_model(model_data)
 
-    @staticmethod
-    def _normalize(tensor: torch.Tensor) -> torch.Tensor:
-        return F.normalize(tensor, p=2, dim=-1)
+    def _load_model(self, centroids: Dict):
+        self._centroids = {
+            self._label_ids_by_name[label]: torch.tensor(centroid)
+            for label, centroid in centroids.items()
+        }
+        self._normalized_centroids = {
+            label: self._normalize(centroid)
+            for label, centroid in self._centroids.items()
+        }
 
     def train(self):
         if self._texts_by_label is None:
             raise ValueError("Dataset is not loaded.")
 
         for label, texts in self._texts_by_label.items():
-            embeddings = list(self.get_embeddings(
-                texts,
-                title='Generating embeddings [{}]'.format(label),
+            texts = [self._template.format(text) for text in texts]
+            embeddings = list(self.embeddings_model.get_embeddings(
+                texts=texts,
+                pooling=self._pooling,
+                title='Generating embeddings [{}]'.format(
+                    self._label_names_by_id[label],
+                ),
                 show_progress=True,
             ))
             embeddings = torch.stack(embeddings)
@@ -47,66 +66,50 @@ class CentroidSentenceClassifier(SentenceClassifierInterface):
     def predict(
         self,
         texts: List[str],
-    ) -> Generator[Dict[int, float], None, None]:  # noqa: E501
+    ) -> Generator[Dict[int, float], None, None]:
         if self._normalized_centroids is None:
             raise ValueError("Model is not trained.")
 
         if not isinstance(texts, list):
             raise TypeError("Input must be a list of strings.")
 
-        texts_embeddings = self.get_embeddings(texts)
-        normalized_texts_embeddings = [
+        texts = [self._template.format(text) for text in texts]
+        embeddings = self.embeddings_model.get_embeddings(
+            texts=texts,
+            pooling=self._pooling,
+        )
+
+        normalized_embeddings = [
             self._normalize(embedding)
-            for embedding in texts_embeddings
+            for embedding in embeddings
         ]
 
-        for text_embedding in normalized_texts_embeddings:
+        for text_embedding in normalized_embeddings:
             dot_products = {
                 label: torch.dot(text_embedding, centroid).item()
                 for label, centroid in self._normalized_centroids.items()
             }
 
-            total = sum(dot_products.values())
+            dot_product_values = torch.tensor(list(dot_products.values()))
+            softmax_scores = F.softmax(dot_product_values, dim=0).tolist()
+
             scores = {
-                label: value / total
-                for label, value in dot_products.items()
+                self._label_names_by_id[label]: score
+                for label, score in zip(dot_products.keys(), softmax_scores)
             }
 
-            yield scores
+            result = {
+                'label': max(scores, key=scores.get),
+                'scores': scores,
+            }
 
-    def predict_one(self, text: str) -> Dict[int, float]:
-        return list(self.predict([text]))[0]
+            yield result
 
-    def _load_centroids(self, centroids: Dict):
-        self._centroids = {
-            int(label): torch.tensor(centroid)
-            for label, centroid in centroids.items()
+    def _get_info(self):
+        info = super()._get_info()
+        info['model']['kernel'] = Kernels.NEAREST_CENTROID.value
+        info['model']['data'] = {
+            self._label_names_by_id[key]: value.tolist()
+            for key, value in self._centroids.items()
         }
-        self._normalized_centroids = {
-            label: self._normalize(centroid)
-            for label, centroid in self._centroids.items()
-        }
-
-    def save_model(
-        self,
-        path: str,
-        description: str = None,
-    ):
-        os.makedirs(path, exist_ok=True)
-        model = {
-            'version': 1.0,
-            'model': {
-                'type': 'centroids',
-                'embeddings': self._embeddings_model._model.name_or_path,
-                'data': {
-                    key: value.tolist()
-                    for key, value in self._centroids.items()
-                },
-            },
-        }
-
-        if description is not None:
-            model['description'] = description
-
-        with open(os.path.join(path, 'config.json'), 'w') as f:
-            json.dump(model, f, indent=4)
+        return info

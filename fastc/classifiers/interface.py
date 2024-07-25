@@ -1,87 +1,187 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import json
 import os
-from typing import Dict, Generator, List, Optional, Tuple
+from typing import Dict, Generator, List, Tuple
 
-import numpy as np
 import torch
-from huggingface_hub import HfApi, create_repo
-from tqdm import tqdm
+import torch.nn.functional as F
+from huggingface_hub import HfApi
 
-from .embeddings import EmbeddingsModel
+from ..pooling import ATTENTION_POOLING_STRATEGIES
+from ..template import Template
+from .embeddings import EmbeddingsModel, Pooling
+
+FASTC_FORMAT_VERSION = 2.0
 
 
-class SentenceClassifierInterface:
-    def __init__(self, model_name: str):
-        self._embeddings_model = EmbeddingsModel(model_name)
+class ClassifierInterface:
+    def __init__(
+        self,
+        embeddings_model: str,
+        template: Template,
+        pooling: Pooling,
+        label_names_by_id: Dict[int, str],
+    ):
+        output_attentions = False
+        if pooling in ATTENTION_POOLING_STRATEGIES:
+            output_attentions = True
+        self._embeddings_model = EmbeddingsModel(
+            embeddings_model,
+            output_attentions=output_attentions,
+        )
+        self._template = template
+        self._pooling = pooling
         self._texts_by_label = None
+        self._label_names_by_id = label_names_by_id
 
-    def load_dataset(self, dataset: List[Tuple[str, int]]):
+        self._label_ids_by_name = None
+        if label_names_by_id is not None:
+            self._label_ids_by_name = {
+                v: k for k, v in label_names_by_id.items()
+            }
+
+    @staticmethod
+    def _normalize(tensor: torch.Tensor) -> torch.Tensor:
+        return F.normalize(tensor, p=2, dim=-1)
+
+    def load_dataset(self, dataset: List[Tuple[str, str]]):
         if not isinstance(dataset, list):
             raise TypeError('Dataset must be a list of tuples.')
 
-        if not all(isinstance(text, str) and isinstance(label, int) for text, label in dataset):  # noqa: E501
-            raise TypeError('Each tuple in the dataset must be (str, int).')
-
         texts_by_label = {}
+        label_names_by_id = {}
+        label_index = 0
+
         for text, label in dataset:
-            if label not in texts_by_label:
-                texts_by_label[label] = []
-            texts_by_label[label].append(text)
+            if label not in label_names_by_id:
+                label_names_by_id[label] = label_index
+                label_index += 1
+
+            label_id = label_names_by_id[label]
+
+            if label_id not in texts_by_label:
+                texts_by_label[label_id] = []
+
+            texts_by_label[label_id].append(text)
 
         self._texts_by_label = texts_by_label
+        self._label_names_by_id = {v: k for k, v in label_names_by_id.items()}
 
-    @torch.no_grad()
-    def get_embeddings(
-        self,
-        texts: List[str],
-        title: Optional[str] = None,
-        show_progress: bool = False,
-    ) -> Generator[torch.Tensor, None, None]:
-        for text in tqdm(
-            texts,
-            desc=title,
-            unit='text',
-            disable=not show_progress,
-        ):
-            inputs = self._embeddings_model.tokenizer(
-                text,
-                return_tensors='pt',
-                padding=True,
-                truncation=True,
-            )
-            outputs = self._embeddings_model.model(**inputs)
-
-            token_embeddings = outputs.last_hidden_state[0]
-            sentence_embedding = torch.mean(
-                token_embeddings,
-                dim=0,
-            )
-            yield sentence_embedding
+    @property
+    def embeddings_model(self):
+        return self._embeddings_model
 
     def train(self):
-        raise NotImplementedError
-
-    def predict_one(self, text: str) -> Dict[int, float]:
         raise NotImplementedError
 
     def predict(self, texts: List[str]) -> Generator[Dict[int, float], None, None]:  # noqa: E501
         raise NotImplementedError
 
-    def save_model(self, path: str):
-        raise NotImplementedError
+    def predict_one(self, text: str) -> Dict[int, float]:
+        return list(self.predict([text]))[0]
 
-    def push_to_hub(self, repo_id: str, **kwargs):
-        kwargs['exist_ok'] = True
-        kwargs['repo_type'] = 'model'
-        create_repo(repo_id, **kwargs)
-        config_path = '/tmp/fastc/config.json'
+    def _get_info(self):
+        return {
+            'version': FASTC_FORMAT_VERSION,
+            'model': {
+                'embeddings': self._embeddings_model_name,
+                'pooling': self._pooling.value,
+                'template': {
+                    'text': self._template._template,
+                    'variables': self._template._variables,
+                },
+                'labels': {v: k for k, v in self._label_names_by_id.items()},
+            },
+        }
+
+    def save_model(
+        self,
+        path: str,
+        description: str = None,
+    ):
+        os.makedirs(path, exist_ok=True)
+
+        model_info = self._get_info()
+        if description is not None:
+            model_info['description'] = description
+
+        with open(os.path.join(path, 'config.json'), 'w') as f:
+            json.dump(
+                model_info,
+                f,
+                indent=4,
+                ensure_ascii=False,
+            )
+
+    @property
+    def _embeddings_model_name(self):
+        return self._embeddings_model._model.name_or_path
+
+    def push_to_hub(
+        self,
+        repo_id: str,
+        tags: List[str] = None,
+        languages: List[str] = None,
+        private: bool = False,
+    ):
+        if tags is None:
+            tags = []
+        tags = ['fastc', 'fastc-{}'.format(FASTC_FORMAT_VERSION)] + tags
+
         self.save_model('/tmp/fastc')
-        HfApi().upload_file(
-            path_or_fileobj=config_path,
-            path_in_repo='config.json',
+
+        api = HfApi()
+
+        api.create_repo(
             repo_id=repo_id,
             repo_type='model',
+            private=private,
+            exist_ok=True,
         )
-        os.remove(config_path)
+
+        readme = (
+            '---\n'
+            'base_model: {}\n'
+        ).format(self._embeddings_model_name)
+
+        if languages is not None:
+            readme += 'language:\n'
+            for language in languages:
+                readme += '- {}\n'.format(language)
+
+        readme += 'tags:\n'
+        for tag in tags:
+            readme += '- {}\n'.format(tag)
+
+        readme += '---\n\n'
+
+        repo_name = repo_id.split('/')[1]
+        readme += (
+            '# {}\n\n'
+            '## Install fastc\n'
+            '```bash\npip install fastc\n```\n\n'
+            '## Model Inference\n'
+            '```python\n'
+            'from fastc import Fastc\n\n'
+            'model = Fastc(\'{}\')\n'
+            'label = model.predict_one(text)[\'label\']\n'
+            '```'
+        ).format(repo_name, repo_id)
+
+        readme_path = '/tmp/fastc/README.md'
+        model_path = '/tmp/fastc/config.json'
+
+        with open(readme_path, 'w') as readme_file:
+            readme_file.write(readme)
+
+        for file_path in [readme_path, model_path]:
+            base_name = os.path.basename(file_path)
+            api.upload_file(
+                repo_id=repo_id,
+                repo_type='model',
+                path_or_fileobj=file_path,
+                path_in_repo=base_name,
+                commit_message='Updated {} via fastc'.format(base_name),
+            )
+            os.remove(file_path)

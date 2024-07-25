@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastc"
-version = "1.2406.5"
-description = "Simple and Lightweight Text Classifiers with LLM Embeddings"
+version = "2.2407.0"
+description = "Unattended Lightweight Text Classifiers with State-of-the-Art LLM Embeddings"
 authors = [
     {name = "Rodrigo Martínez (brunneis)", email = "dev@brunneis.com"}
 ]
@@ -22,16 +22,24 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
     "Topic :: Software Development :: Libraries :: Python Modules"
 ]
+dependencies = [
+    "transformers",
+    "huggingface-hub",
+    "torch",
+    "tqdm",
+    "scikit-learn",
+    "joblib",
+]
 
 [project.urls]
 Repository = "https://github.com/EveripediaNetwork/fastc"
 
 [project.optional-dependencies]
 dev = [
-    "transformers",
-    "huggingface-hub",
-    "torch",
-    "tqdm"
+    "build",
+    "installer",
+    "wheel",
+    "twine",
 ]
 
 [tool.setuptools.packages.find]
