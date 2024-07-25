@@ -10,7 +10,7 @@
 
 
 # Key features
-- **Focused on limited-memory CPU execution:** Use efficient distilled models such as [`deepset/tinyroberta-6l-768d`](https://huggingface.co/deepset/tinyroberta-6l-768d) for embedding generation.
+- **Suitable for limited-memory CPU execution:** Use efficient distilled models such as [`deepset/tinyroberta-6l-768d`](https://huggingface.co/deepset/tinyroberta-6l-768d) for embedding generation.
 - **Cosine Similarity and Logistic Regression Classification:** Bypass the need for fine-tuning by utilizing LLM embeddings to efficiently categorize texts using either cosine similarity with class centroids or logistic regression.
 - **Efficient Parallel Execution:** Run hundreds of classifiers concurrently with minimal overhead by sharing the same model for embedding generation.
 
@@ -44,19 +44,84 @@ tuples = [
     ("I'm proud of my achievements this year.", 'positive'),
     ("I'm exhausted and overwhelmed with everything.", 'positive'),
 ]
+```
 
-model = Fastc(embeddings_model='microsoft/deberta-base')
+## Classification Kernels
+### Cosine Similarity
+```python
+model = Fastc(
+    embeddings_model='microsoft/deberta-base',
+)
+
 model.load_dataset(tuples)
 model.train()
 ```
 
-# Export a model
+### Logistic Regression
+```python
+from fastc import ModelTypes
+
+model = Fastc(
+    embeddings_model='microsoft/deberta-base',
+    model_type=ModelTypes.LOGISTIC_REGRESSION,
+    # cross_validation_splits=5,
+    # cross_validation_repeats=3,
+    # iterations=100,
+    # parameters={...},
+    # seed=1984,
+)
+
+model.load_dataset(tuples)
+model.train()
+```
+
+## Pooling Strategies
+The implemented pooling strategies are:
+- MEAN (default)
+- MEAN_MASKED
+- MAX
+- MAX_MASKED
+- CLS
+- SUM
+- ATTENTION_WEIGHTED
+
+```python
+from fastc import PoolingStrategies
+
+model = Fastc(
+    embeddings_model='microsoft/deberta-base',
+    pooling=PoolingStrategies.MEAN_MASKED,
+)
+
+model.load_dataset(tuples)
+model.train()
+```
+
+## Templates and Instruct Models
+You can use instruct templates with instruct models such as `intfloat/multilingual-e5-large-instruct`. Other models may also improve in performance by using templates, even if they were not explicitly trained with them.
+
+```python
+from fastc import ModelTemplates, Fastc, Template
+
+# template_text = 'Instruct: {instruction}\nQuery: {text}'
+template_text = ModelTemplates.E5_INSTRUCT
+
+model = Fastc(
+    embeddings_model='intfloat/multilingual-e5-large-instruct',
+    template=Template(
+        template_text,
+        instruction='Classify as positive or negative'
+    ),
+)
+```
+
+# Export and load models
 After training, you can save the model for future use:
 ```python
 model.save_model('./sentiment-classifier/')
 ```
 
-# Publish model to HuggingFace
+## Publish a model to HuggingFace
 > [!IMPORTANT]  
 > Log in to HuggingFace first with `huggingface-cli login`
 
@@ -69,7 +134,7 @@ model.push_to_hub(
 )
 ```
 
-# Load an existing model
+## Load an existing model
 You can load a pre-trained model either from a directory or from HuggingFace:
 ```python
 # From a directory
@@ -96,23 +161,6 @@ for scores in scores_list:
     print(max(scores, key=scores.get))
 ```
 
-# Templates and Instruct Models
-You can use instruct templates with instruct models such as `intfloat/multilingual-e5-large-instruct`. Other models may also improve in performance by using templates, even if they were not explicitly trained with them.
-
-```python
-from fastc import ModelTemplates, Fastc, Template
-
-# template_text = 'Instruct: {instruction}\nQuery: {text}'
-template_text = ModelTemplates.E5_INSTRUCT
-
-model = Fastc(
-    embeddings_model='intfloat/multilingual-e5-large-instruct',
-    template=Template(
-        template_text,
-        instruction='Classify as positive or negative'
-    ),
-)
-```
 # Inference Server
 
 To launch the dockerized inference server, use the following script:
@@ -157,6 +205,6 @@ To check the `fastc` version, use `GET /version`:
 Response:
 ```json
 {
-    "version": "2.2406.0"
+    "version": "2.2407.0"
 }
 ```
