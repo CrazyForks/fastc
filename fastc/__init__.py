@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import sys
+import warnings
+from os import environ as env
+
 from .fastc import Fastc, ModelTypes, Pooling, SentenceClassifier  # noqa: F401
 from .template import ModelTemplates, Template  # noqa: F401
+
+env['TOKENIZERS_PARALLELISM'] = 'true'
+
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+    env["PYTHONWARNINGS"] = "ignore::UserWarning"

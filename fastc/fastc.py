@@ -24,6 +24,7 @@ class Fastc:
         model_type: ModelTypes = None,
         template: str = None,
         pooling: Pooling = None,
+        **kwargs,
     ):
         model_data = None
         label_names_by_id = None
@@ -71,6 +72,7 @@ class Fastc:
             'template': template,
             'pooling': pooling,
             'label_names_by_id': label_names_by_id,
+            **kwargs,
         }
 
         if model_type == ModelTypes.CENTROIDS:

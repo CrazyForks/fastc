@@ -4,12 +4,13 @@
 import base64
 import io
 import warnings
-from typing import Dict, Generator, List
+from typing import Dict, Generator, List, Union
 
 import joblib
-from scipy.stats import loguniform, uniform
+from scipy.stats import loguniform
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import RandomizedSearchCV
+from sklearn.model_selection import RandomizedSearchCV, RepeatedStratifiedKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -28,6 +29,11 @@ class LogisticRegressionClassifier(ClassifierInterface):
         pooling: Pooling,
         label_names_by_id: Dict[int, str],
         model_data: Dict[int, List[float]] = None,
+        cross_validation_splits: int = None,
+        cross_validation_repeats: int = None,
+        attempts: int = None,
+        parameter_distributions: Union[Dict, List] = None,
+        seed: int = None,
     ):
         super().__init__(
             embeddings_model=embeddings_model,
@@ -40,6 +46,21 @@ class LogisticRegressionClassifier(ClassifierInterface):
             StandardScaler(),
             LogisticRegression()
         )
+
+        if cross_validation_splits is None:
+            cross_validation_splits = 5
+        self._cross_validation_splits = cross_validation_splits
+
+        if cross_validation_repeats is None:
+            cross_validation_repeats = 3
+        self._cross_validation_repeats = cross_validation_repeats
+
+        if attempts is None:
+            attempts = 100
+        self._attempts = attempts
+
+        self._parameter_distributions = parameter_distributions
+        self._seed = seed
 
         if model_data is None:
             return
@@ -76,34 +97,111 @@ class LogisticRegressionClassifier(ClassifierInterface):
             X.extend(normalized_embeddings)
             y.extend([label] * len(texts))
 
-        param_distributions = {
-            'logisticregression__C': loguniform(1e-5, 1e5),
-            'logisticregression__solver': ['newton-cg', 'lbfgs', 'liblinear', 'sag', 'saga'],  # noqa: E501
-            'logisticregression__max_iter': [100, 200, 500, 1000, 2000, 5000, 10000],  # noqa: E501
-            'logisticregression__tol': loguniform(1e-6, 1e-2),
-            'logisticregression__penalty': ['l1', 'l2', 'elasticnet', 'none'],
-            'logisticregression__class_weight': ['balanced', None],
-            'logisticregression__warm_start': [True, False],
-            'logisticregression__l1_ratio': uniform(0, 1),
+        common_params = {
+            'C': loguniform(1e-6, 1e3),
+            'max_iter': [3000],
+            'tol': loguniform(1e-6, 1e-2),
+            'class_weight': [None, 'balanced'],
+            'warm_start': [True, False],
+            'fit_intercept': [True, False],
+            'intercept_scaling': [0.001, 0.01, 0.1, 0.2, 0.5, 1, 2, 5, 10],
         }
+
+        if self._seed is not None:
+            common_params['random_state'] = [self._seed]
+
+        compatible_params = [
+            {
+                'solver': ['liblinear'],
+                'penalty': ['l1'],
+                'dual': [False],
+            },
+            {
+                'solver': ['liblinear'],
+                'penalty': ['l2'],
+                'dual': [True, False],
+            },
+            {
+                'solver': ['saga'],
+                'penalty': ['l1', 'l2'],
+                'l1_ratio': loguniform(1e-2, 1)
+            },
+            {
+                'solver': ['saga'],
+                'penalty': ['elasticnet'],
+                'l1_ratio': loguniform(1e-2, 1)
+            },
+            {
+                'solver': ['saga'],
+                'penalty': [None],
+            },
+            {
+                'solver': ['newton-cg'],
+                'penalty': ['l2'],
+            },
+            {
+                'solver': ['newton-cg'],
+                'penalty': [None],
+            },
+            {
+                'solver': ['lbfgs'],
+                'penalty': ['l2'],
+            },
+            {
+                'solver': ['lbfgs'],
+                'penalty': [None],
+            },
+            {
+                'solver': ['sag'],
+                'penalty': ['l2'],
+            },
+            {
+                'solver': ['sag'],
+                'penalty': [None],
+            },
+        ]
+
+        def prefix_params(params: Dict):
+            return {
+                'logisticregression__' + key: value
+                for key, value in params.items()
+            }
+
+        if self._parameter_distributions is None:
+            parameter_distributions = []
+            for item in compatible_params:
+                new_item = item | common_params
+
+                if new_item['penalty'] == [None]:
+                    del new_item['C']
+
+                if new_item['penalty'] != ['elasticnet']:
+                    if 'l1_ratio' in new_item:
+                        del new_item['l1_ratio']
+
+                parameter_distributions.append(prefix_params(new_item))
 
         random_search = RandomizedSearchCV(
             self._lr_pipeline,
-            param_distributions=param_distributions,
-            n_iter=128,
-            cv=5,
+            param_distributions=parameter_distributions,
+            n_iter=self._attempts,
+            cv=RepeatedStratifiedKFold(
+                n_splits=self._cross_validation_splits,
+                n_repeats=self._cross_validation_repeats,
+                random_state=self._seed,
+            ),
             scoring='accuracy',
-            n_jobs=1,
+            n_jobs=-1,
             verbose=0,
+            random_state=self._seed,
         )
 
         loader = Loader("Training")
         loader.start()
-
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+            warnings.simplefilter("ignore", ConvergenceWarning)
+            warnings.simplefilter("ignore", ConvergenceWarning)
             random_search.fit(X, y)
-
         loader.stop()
 
         self._model = random_search.best_estimator_
