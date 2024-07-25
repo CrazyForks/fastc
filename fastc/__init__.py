@@ -5,7 +5,8 @@ import sys
 import warnings
 from os import environ as env
 
-from .fastc import Fastc, ModelTypes, Pooling, SentenceClassifier  # noqa: F401
+from .fastc import (Fastc, ModelTypes, PoolingStrategies,  # noqa: F401
+                    SentenceClassifier)
 from .template import ModelTemplates, Template  # noqa: F401
 
 env['TOKENIZERS_PARALLELISM'] = 'true'

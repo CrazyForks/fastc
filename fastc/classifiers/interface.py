@@ -10,7 +10,7 @@ from huggingface_hub import HfApi
 
 from ..pooling import ATTENTION_POOLING_STRATEGIES
 from ..template import Template
-from .embeddings import EmbeddingsModel, Pooling
+from .embeddings import EmbeddingsModel, PoolingStrategies
 
 FASTC_FORMAT_VERSION = 2.0
 
@@ -20,7 +20,7 @@ class ClassifierInterface:
         self,
         embeddings_model: str,
         template: Template,
-        pooling: Pooling,
+        pooling: PoolingStrategies,
         label_names_by_id: Dict[int, str],
     ):
         output_attentions = False

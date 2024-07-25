@@ -16,7 +16,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ..model_types import ModelTypes
 from ..template import Template
-from .embeddings import Pooling
+from .embeddings import PoolingStrategies
 from .interface import ClassifierInterface
 from .loader import Loader
 
@@ -26,13 +26,13 @@ class LogisticRegressionClassifier(ClassifierInterface):
         self,
         embeddings_model: str,
         template: Template,
-        pooling: Pooling,
+        pooling: PoolingStrategies,
         label_names_by_id: Dict[int, str],
         model_data: Dict[int, List[float]] = None,
         cross_validation_splits: int = None,
         cross_validation_repeats: int = None,
-        attempts: int = None,
-        parameter_distributions: Union[Dict, List] = None,
+        iterations: int = None,
+        parameters: Union[Dict, List] = None,
         seed: int = None,
     ):
         super().__init__(
@@ -55,11 +55,11 @@ class LogisticRegressionClassifier(ClassifierInterface):
             cross_validation_repeats = 3
         self._cross_validation_repeats = cross_validation_repeats
 
-        if attempts is None:
-            attempts = 100
-        self._attempts = attempts
+        if iterations is None:
+            iterations = 100
+        self._iterations = iterations
 
-        self._parameter_distributions = parameter_distributions
+        self._parameters = parameters
         self._seed = seed
 
         if model_data is None:
@@ -167,8 +167,8 @@ class LogisticRegressionClassifier(ClassifierInterface):
                 for key, value in params.items()
             }
 
-        if self._parameter_distributions is None:
-            parameter_distributions = []
+        if self._parameters is None:
+            parameters = []
             for item in compatible_params:
                 new_item = item | common_params
 
@@ -179,12 +179,12 @@ class LogisticRegressionClassifier(ClassifierInterface):
                     if 'l1_ratio' in new_item:
                         del new_item['l1_ratio']
 
-                parameter_distributions.append(prefix_params(new_item))
+                parameters.append(prefix_params(new_item))
 
         random_search = RandomizedSearchCV(
             self._lr_pipeline,
-            param_distributions=parameter_distributions,
-            n_iter=self._attempts,
+            param_distributions=parameters,
+            n_iter=self._iterations,
             cv=RepeatedStratifiedKFold(
                 n_splits=self._cross_validation_splits,
                 n_repeats=self._cross_validation_repeats,

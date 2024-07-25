@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
-from ..pooling import Pooling
+from ..pooling import PoolingStrategies
 
 
 class EmbeddingsModel:
@@ -52,7 +52,7 @@ class EmbeddingsModel:
     def get_embeddings(
         self,
         texts: List[str],
-        pooling: Pooling,
+        pooling: PoolingStrategies,
         title: Optional[str] = None,
         show_progress: bool = False,
     ) -> Generator[torch.Tensor, None, None]:
@@ -71,11 +71,11 @@ class EmbeddingsModel:
             outputs = self._model(**inputs)
             attention_mask = inputs['attention_mask']
 
-            if pooling == Pooling.MEAN:
+            if pooling == PoolingStrategies.MEAN:
                 sentence_embeddings = outputs.last_hidden_state.mean(dim=1)
                 yield from sentence_embeddings
 
-            elif pooling == Pooling.MEAN_MASKED:
+            elif pooling == PoolingStrategies.MEAN_MASKED:
                 last_hidden_state = outputs.last_hidden_state.masked_fill(
                     ~attention_mask[..., None].bool(),
                     0.0,
@@ -87,7 +87,7 @@ class EmbeddingsModel:
                 )
                 yield from sentence_embeddings
 
-            elif pooling == Pooling.ATTENTION_WEIGHTED:
+            elif pooling == PoolingStrategies.ATTENTION_WEIGHTED:
                 attention_weights = outputs.attentions[-1]
                 attention_weights = attention_weights.masked_fill(
                     ~attention_mask[:, None, None, :].bool(),
@@ -102,18 +102,18 @@ class EmbeddingsModel:
                 ).sum(dim=1)
                 yield from sentence_embeddings
 
-            elif pooling == Pooling.CLS:
+            elif pooling == PoolingStrategies.CLS:
                 sentence_embeddings = outputs.last_hidden_state[:, 0]
                 yield from sentence_embeddings
 
-            elif pooling == Pooling.MAX:
+            elif pooling == PoolingStrategies.MAX:
                 sentence_embeddings = torch.max(
                     outputs.last_hidden_state,
                     dim=1,
                 )[0]
                 yield from sentence_embeddings
 
-            elif pooling == Pooling.MAX_MASKED:
+            elif pooling == PoolingStrategies.MAX_MASKED:
                 last_hidden_state = outputs.last_hidden_state.masked_fill(
                     ~attention_mask[..., None].bool(),
                     float('-inf'),
@@ -121,7 +121,7 @@ class EmbeddingsModel:
                 sentence_embeddings = torch.max(last_hidden_state, dim=1)[0]
                 yield from sentence_embeddings
 
-            elif pooling == Pooling.SUM:
+            elif pooling == PoolingStrategies.SUM:
                 sentence_embeddings = outputs.last_hidden_state.sum(dim=1)
                 yield from sentence_embeddings
 

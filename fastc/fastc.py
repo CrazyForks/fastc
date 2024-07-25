@@ -8,7 +8,7 @@ from huggingface_hub import hf_hub_download
 from transformers import logging
 
 from .classifiers.centroids import CentroidClassifier
-from .classifiers.embeddings import Pooling
+from .classifiers.embeddings import PoolingStrategies
 from .classifiers.logistic_regression import LogisticRegressionClassifier
 from .model_types import ModelTypes
 from .template import Template
@@ -23,7 +23,7 @@ class Fastc:
         embeddings_model: str = None,
         model_type: ModelTypes = None,
         template: str = None,
-        pooling: Pooling = None,
+        pooling: PoolingStrategies = None,
         **kwargs,
     ):
         model_data = None
@@ -44,9 +44,9 @@ class Fastc:
             else:
                 label_names_by_id = {v: k for k, v in labels.items()}
 
-            pooling = Pooling.from_value(model_config.get(
+            pooling = PoolingStrategies.from_value(model_config.get(
                 'pooling',
-                Pooling.MEAN.value,  # Backwards compatibility
+                PoolingStrategies.MEAN.value,  # Backwards compatibility
             ))
 
             if 'template' in model_config:
@@ -64,7 +64,7 @@ class Fastc:
             template = Template()
 
         if pooling is None:
-            pooling = Pooling.DEFAULT
+            pooling = PoolingStrategies.DEFAULT
 
         classifier_kwargs = {
             'embeddings_model': embeddings_model,

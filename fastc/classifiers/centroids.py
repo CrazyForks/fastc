@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from ..model_types import ModelTypes
 from ..template import Template
-from .embeddings import Pooling
+from .embeddings import PoolingStrategies
 from .interface import ClassifierInterface
 
 
@@ -17,7 +17,7 @@ class CentroidClassifier(ClassifierInterface):
         self,
         embeddings_model: str,
         template: Template,
-        pooling: Pooling,
+        pooling: PoolingStrategies,
         label_names_by_id: Dict[int, str],
         model_data: Dict[int, List[float]] = None,
     ):
