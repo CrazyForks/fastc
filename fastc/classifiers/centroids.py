@@ -6,9 +6,9 @@ from typing import Dict, Generator, List
 import torch
 import torch.nn.functional as F
 
-from ..model_types import ModelTypes
+from ..kernels import Kernels
 from ..template import Template
-from .embeddings import PoolingStrategies
+from .embeddings import Pooling
 from .interface import ClassifierInterface
 
 
@@ -17,7 +17,7 @@ class CentroidClassifier(ClassifierInterface):
         self,
         embeddings_model: str,
         template: Template,
-        pooling: PoolingStrategies,
+        pooling: Pooling,
         label_names_by_id: Dict[int, str],
         model_data: Dict[int, List[float]] = None,
     ):
@@ -107,7 +107,7 @@ class CentroidClassifier(ClassifierInterface):
 
     def _get_info(self):
         info = super()._get_info()
-        info['model']['type'] = ModelTypes.CENTROIDS.value
+        info['model']['kernel'] = Kernels.NEAREST_CENTROID.value
         info['model']['data'] = {
             self._label_names_by_id[key]: value.tolist()
             for key, value in self._centroids.items()

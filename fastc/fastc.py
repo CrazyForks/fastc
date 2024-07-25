@@ -8,9 +8,9 @@ from huggingface_hub import hf_hub_download
 from transformers import logging
 
 from .classifiers.centroids import CentroidClassifier
-from .classifiers.embeddings import PoolingStrategies
+from .classifiers.embeddings import Pooling
 from .classifiers.logistic_regression import LogisticRegressionClassifier
-from .model_types import ModelTypes
+from .kernels import Kernels
 from .template import Template
 
 logging.set_verbosity_error()
@@ -21,19 +21,29 @@ class Fastc:
         cls,
         model: str = None,
         embeddings_model: str = None,
-        model_type: ModelTypes = None,
+        kernel: Kernels = None,
+        model_type: Kernels = None,  # Backwards compatibility
         template: str = None,
-        pooling: PoolingStrategies = None,
+        pooling: Pooling = None,
         **kwargs,
     ):
         model_data = None
         label_names_by_id = None
 
+        # Backwards compatibility
+        if kernel is None and model_type is not None:
+            kernel = model_type
+
         if model is not None:
             config = cls._get_config(model)
             model_config = config['model']
 
-            model_type = ModelTypes.from_value(model_config['type'])
+            try:
+                kernel = Kernels.from_value(model_config['kernel'])
+            except KeyError:
+                # Backwards compatibility
+                kernel = Kernels.from_value(model_config['type'])
+
             model_data = model_config['data']
             embeddings_model = model_config['embeddings']
 
@@ -44,9 +54,9 @@ class Fastc:
             else:
                 label_names_by_id = {v: k for k, v in labels.items()}
 
-            pooling = PoolingStrategies.from_value(model_config.get(
+            pooling = Pooling.from_value(model_config.get(
                 'pooling',
-                PoolingStrategies.MEAN.value,  # Backwards compatibility
+                Pooling.MEAN.value,  # Backwards compatibility
             ))
 
             if 'template' in model_config:
@@ -57,14 +67,14 @@ class Fastc:
         if embeddings_model is None:
             embeddings_model = 'deepset/tinyroberta-6l-768d'
 
-        if model_type is None:
-            model_type = ModelTypes.CENTROIDS
+        if kernel is None:
+            kernel = Kernels.LOGISTIC_REGRESSION
 
         if template is None:
             template = Template()
 
         if pooling is None:
-            pooling = PoolingStrategies.DEFAULT
+            pooling = Pooling.DEFAULT
 
         classifier_kwargs = {
             'embeddings_model': embeddings_model,
@@ -75,13 +85,17 @@ class Fastc:
             **kwargs,
         }
 
-        if model_type == ModelTypes.CENTROIDS:
-            return CentroidClassifier(**classifier_kwargs)
-
-        if model_type == ModelTypes.LOGISTIC_REGRESSION:
+        if kernel == Kernels.LOGISTIC_REGRESSION:
             return LogisticRegressionClassifier(**classifier_kwargs)
 
-        raise ValueError("Unsupported model type {}".format(model_type))
+        if kernel == Kernels.NEAREST_CENTROID:
+            return CentroidClassifier(**classifier_kwargs)
+
+        # Backwards compatibility
+        if kernel == Kernels.CENTROIDS:
+            return CentroidClassifier(**classifier_kwargs)
+
+        raise ValueError("Unsupported model type {}".format(kernel))
 
     @staticmethod
     def _get_config(model: str):

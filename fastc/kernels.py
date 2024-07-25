@@ -4,12 +4,15 @@
 from enum import Enum
 
 
-class ModelTypes(Enum):
-    CENTROIDS = 'centroids'
+class Kernels(Enum):
+    NEAREST_CENTROID = 'nearest-centroid'
     LOGISTIC_REGRESSION = 'logistic-regression'
 
+    # Backwards compatibility
+    CENTROIDS = 'centroids'
+
     @classmethod
-    def from_value(cls, value: str) -> 'ModelTypes':
+    def from_value(cls, value: str) -> 'Kernels':
         try:
             return cls._value2member_map_[value]
         except KeyError:

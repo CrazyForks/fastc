@@ -4,7 +4,7 @@
 from enum import Enum
 
 
-class PoolingStrategies(Enum):
+class Pooling(Enum):
     MEAN = 'mean'
     MEAN_MASKED = 'mean-masked'
     MAX = 'max'
@@ -15,7 +15,7 @@ class PoolingStrategies(Enum):
     DEFAULT = MEAN
 
     @classmethod
-    def from_value(cls, value: str) -> 'PoolingStrategies':
+    def from_value(cls, value: str) -> 'Pooling':
         try:
             return cls._value2member_map_[value]
         except KeyError:
@@ -23,5 +23,5 @@ class PoolingStrategies(Enum):
 
 
 ATTENTION_POOLING_STRATEGIES = set([
-    PoolingStrategies.ATTENTION_WEIGHTED,
+    Pooling.ATTENTION_WEIGHTED,
 ])

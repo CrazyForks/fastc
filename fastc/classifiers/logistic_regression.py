@@ -14,9 +14,9 @@ from sklearn.model_selection import RandomizedSearchCV, RepeatedStratifiedKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from ..model_types import ModelTypes
+from ..kernels import Kernels
 from ..template import Template
-from .embeddings import PoolingStrategies
+from .embeddings import Pooling
 from .interface import ClassifierInterface
 from .loader import Loader
 
@@ -26,7 +26,7 @@ class LogisticRegressionClassifier(ClassifierInterface):
         self,
         embeddings_model: str,
         template: Template,
-        pooling: PoolingStrategies,
+        pooling: Pooling,
         label_names_by_id: Dict[int, str],
         model_data: Dict[int, List[float]] = None,
         cross_validation_splits: int = None,
@@ -238,7 +238,7 @@ class LogisticRegressionClassifier(ClassifierInterface):
 
     def _get_info(self):
         info = super()._get_info()
-        info['model']['type'] = ModelTypes.LOGISTIC_REGRESSION.value
+        info['model']['kernel'] = Kernels.LOGISTIC_REGRESSION.value
 
         buffer = io.BytesIO()
         joblib.dump(self._model, buffer, protocol=5)
