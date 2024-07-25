@@ -12,7 +12,7 @@ from .embeddings import Pooling
 from .interface import ClassifierInterface
 
 
-class CentroidClassifier(ClassifierInterface):
+class NearestCentroidClassifier(ClassifierInterface):
     def __init__(
         self,
         embeddings_model: str,
