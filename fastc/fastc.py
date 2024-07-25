@@ -7,7 +7,7 @@ import os
 from huggingface_hub import hf_hub_download
 from transformers import logging
 
-from .classifiers.centroids import CentroidClassifier
+from .classifiers.centroids import NearestCentroidClassifier
 from .classifiers.embeddings import Pooling
 from .classifiers.logistic_regression import LogisticRegressionClassifier
 from .kernels import Kernels
@@ -89,11 +89,11 @@ class Fastc:
             return LogisticRegressionClassifier(**classifier_kwargs)
 
         if kernel == Kernels.NEAREST_CENTROID:
-            return CentroidClassifier(**classifier_kwargs)
+            return NearestCentroidClassifier(**classifier_kwargs)
 
         # Backwards compatibility
         if kernel == Kernels.CENTROIDS:
-            return CentroidClassifier(**classifier_kwargs)
+            return NearestCentroidClassifier(**classifier_kwargs)
 
         raise ValueError("Unsupported model type {}".format(kernel))
 
