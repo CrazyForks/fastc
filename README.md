@@ -116,7 +116,7 @@ model = Fastc(
 )
 ```
 
-# Export and load models
+# Save, load and export models
 After training, you can save the model for future use:
 ```python
 model.save_model('./sentiment-classifier/')
