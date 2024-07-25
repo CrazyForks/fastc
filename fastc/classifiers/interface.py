@@ -1,13 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import json
 import os
 from typing import Dict, Generator, List, Tuple
 
+import torch
+import torch.nn.functional as F
 from huggingface_hub import HfApi
 
+from ..pooling import ATTENTION_POOLING_STRATEGIES
 from ..template import Template
-from .embeddings import ATTENTION_POOLING_STRATEGIES, EmbeddingsModel, Pooling
+from .embeddings import EmbeddingsModel, Pooling
 
 FASTC_FORMAT_VERSION = 2.0
 
@@ -18,6 +21,7 @@ class ClassifierInterface:
         embeddings_model: str,
         template: Template,
         pooling: Pooling,
+        label_names_by_id: Dict[int, str],
     ):
         output_attentions = False
         if pooling in ATTENTION_POOLING_STRATEGIES:
@@ -29,18 +33,40 @@ class ClassifierInterface:
         self._template = template
         self._pooling = pooling
         self._texts_by_label = None
+        self._label_names_by_id = label_names_by_id
 
-    def load_dataset(self, dataset: List[Tuple[str, int]]):
+        self._label_ids_by_name = None
+        if label_names_by_id is not None:
+            self._label_ids_by_name = {
+                v: k for k, v in label_names_by_id.items()
+            }
+
+    @staticmethod
+    def _normalize(tensor: torch.Tensor) -> torch.Tensor:
+        return F.normalize(tensor, p=2, dim=-1)
+
+    def load_dataset(self, dataset: List[Tuple[str, str]]):
         if not isinstance(dataset, list):
             raise TypeError('Dataset must be a list of tuples.')
 
         texts_by_label = {}
+        label_names_by_id = {}
+        label_index = 0
+
         for text, label in dataset:
-            if label not in texts_by_label:
-                texts_by_label[label] = []
-            texts_by_label[label].append(text)
+            if label not in label_names_by_id:
+                label_names_by_id[label] = label_index
+                label_index += 1
+
+            label_id = label_names_by_id[label]
+
+            if label_id not in texts_by_label:
+                texts_by_label[label_id] = []
+
+            texts_by_label[label_id].append(text)
 
         self._texts_by_label = texts_by_label
+        self._label_names_by_id = {v: k for k, v in label_names_by_id.items()}
 
     @property
     def embeddings_model(self):
@@ -49,14 +75,44 @@ class ClassifierInterface:
     def train(self):
         raise NotImplementedError
 
-    def predict_one(self, text: str) -> Dict[int, float]:
-        raise NotImplementedError
-
     def predict(self, texts: List[str]) -> Generator[Dict[int, float], None, None]:  # noqa: E501
         raise NotImplementedError
 
-    def save_model(self, path: str):
-        raise NotImplementedError
+    def predict_one(self, text: str) -> Dict[int, float]:
+        return list(self.predict([text]))[0]
+
+    def _get_info(self):
+        return {
+            'version': FASTC_FORMAT_VERSION,
+            'model': {
+                'embeddings': self._embeddings_model_name,
+                'pooling': self._pooling.value,
+                'template': {
+                    'text': self._template._template,
+                    'variables': self._template._variables,
+                },
+                'labels': {v: k for k, v in self._label_names_by_id.items()},
+            },
+        }
+
+    def save_model(
+        self,
+        path: str,
+        description: str = None,
+    ):
+        os.makedirs(path, exist_ok=True)
+
+        model_info = self._get_info()
+        if description is not None:
+            model_info['description'] = description
+
+        with open(os.path.join(path, 'config.json'), 'w') as f:
+            json.dump(
+                model_info,
+                f,
+                indent=4,
+                ensure_ascii=False,
+            )
 
     @property
     def _embeddings_model_name(self):
@@ -129,16 +185,3 @@ class ClassifierInterface:
                 commit_message='Updated {} via fastc'.format(base_name),
             )
             os.remove(file_path)
-
-    def _get_info(self):
-        return {
-            'version': FASTC_FORMAT_VERSION,
-            'model': {
-                'embeddings': self._embeddings_model_name,
-                'pooling': self._pooling.value,
-                'template': {
-                    'text': self._template._template,
-                    'variables': self._template._variables,
-                },
-            },
-        }

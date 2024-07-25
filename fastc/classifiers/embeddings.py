@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from enum import Enum
 from typing import Generator, List, Optional
 
 import torch
@@ -9,21 +8,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
-
-class Pooling(Enum):
-    MEAN = 'mean'
-    MEAN_MASKED = 'mean-masked'
-    MAX = 'max'
-    MAX_MASKED = 'max-masked'
-    CLS = 'cls'
-    SUM = 'sum'
-    ATTENTION_WEIGHTED = 'attention-weighted'
-    DEFAULT = MEAN
-
-
-ATTENTION_POOLING_STRATEGIES = set([
-    Pooling.ATTENTION_WEIGHTED,
-])
+from ..pooling import Pooling
 
 
 class EmbeddingsModel:

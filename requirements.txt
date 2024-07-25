@@ -2,3 +2,5 @@ transformers
 huggingface-hub
 torch
 tqdm
+scikit-learn
+joblib
