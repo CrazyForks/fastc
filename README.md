@@ -11,7 +11,7 @@
 
 # Key features
 - **Suitable for limited-memory CPU execution:** Use efficient distilled models such as [`deepset/tinyroberta-6l-768d`](https://huggingface.co/deepset/tinyroberta-6l-768d) for embedding generation.
-- **Cosine Similarity and Logistic Regression Classification:** Bypass the need for fine-tuning by utilizing LLM embeddings to efficiently categorize texts using either cosine similarity with class centroids or logistic regression.
+- **Logistic Regression and Nearest Centroid classification:** Bypass the need for fine-tuning by utilizing LLM embeddings to efficiently categorize texts using either logistic regression or the nearest centroid through cosine similarity.
 - **Efficient Parallel Execution:** Run hundreds of classifiers concurrently with minimal overhead by sharing the same model for embedding generation.
 
 # Installation
@@ -47,10 +47,11 @@ tuples = [
 ```
 
 ## Classification Kernels
-### Cosine Similarity
+### Nearest Centroid
 ```python
 model = Fastc(
     embeddings_model='microsoft/deberta-base',
+    kernel=Kernels.NEAREST_CENTROID,
 )
 
 model.load_dataset(tuples)
@@ -59,11 +60,11 @@ model.train()
 
 ### Logistic Regression
 ```python
-from fastc import ModelTypes
+from fastc import Kernels
 
 model = Fastc(
     embeddings_model='microsoft/deberta-base',
-    model_type=ModelTypes.LOGISTIC_REGRESSION,
+    kernel=Kernels.LOGISTIC_REGRESSION,
     # cross_validation_splits=5,
     # cross_validation_repeats=3,
     # iterations=100,
@@ -77,20 +78,20 @@ model.train()
 
 ## Pooling Strategies
 The implemented pooling strategies are:
-- MEAN (default)
-- MEAN_MASKED
-- MAX
-- MAX_MASKED
-- CLS
-- SUM
-- ATTENTION_WEIGHTED
+- `MEAN` (default)
+- `MEAN_MASKED`
+- `MAX`
+- `MAX_MASKED`
+- `CLS`
+- `SUM`
+- `ATTENTION_WEIGHTED`
 
 ```python
-from fastc import PoolingStrategies
+from fastc import Pooling
 
 model = Fastc(
     embeddings_model='microsoft/deberta-base',
-    pooling=PoolingStrategies.MEAN_MASKED,
+    pooling=Pooling.MEAN_MASKED,
 )
 
 model.load_dataset(tuples)
@@ -153,12 +154,12 @@ sentences = [
 
 # Single prediction
 scores = model.predict_one(sentences[0])
-print(max(scores, key=scores.get))
+print(scores['label'])
 
 # Batch predictions
 scores_list = model.predict(sentences)
 for scores in scores_list:
-    print(max(scores, key=scores.get))
+    print(scores['label'])
 ```
 
 # Inference Server
@@ -180,7 +181,7 @@ In both cases, an HTTP API will be available, listening on the `fastc-server` *[
 To classify text, use `POST /` with a JSON payload such as:
 ```json
 {
-    "model": "braindao/tinyroberta-6l-768d-language-identifier-en-es-ko-zh-fastc",
+    "model": "braindao/tinyroberta-6l-768d-language-identifier-en-es-ko-zh-fastc-lr",
     "text": "오늘 저녁에 친구들과 함께 pizza를 먹을 거예요."
 }
 ```
@@ -190,10 +191,10 @@ Response:
 {
     "label": "ko",
     "scores": {
-        "en": 0.23850876092910767,
-        "es": 0.24473699927330017,
-        "ko": 0.2621513605117798,
-        "zh": 0.25460284948349
+        "en": 1.0146501463135055e-08,
+        "es": 6.806091549848057e-09,
+        "ko": 0.9999852640487916,
+        "zh": 1.471899861513275e-05
     }
 }
 ```
