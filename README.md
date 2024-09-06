@@ -1,15 +1,8 @@
-<p align="center">
-    <img src="./misc/fastc.svg" alt="Logo" height="100" />
-<p>
-
 <div align="center">
-    <h3>
-        <b>Unattended Lightweight Text Classifiers with LLM Embeddings</b>
-    </h3>
+  <img src="./misc/fastc.svg" alt="Logo" height="100" />
+  <p><strong>Unattended Lightweight Text Classifiers with LLM Embeddings</strong></p>
 </div>
-
-<br>
-
+<br/>
 <p align="center">
     <a href="https://pypi.python.org/pypi/fastc/"><img alt="PyPi" src="https://img.shields.io/pypi/v/fastc.svg?style=flat-square"></a>
     <a href="https://github.com/EveripediaNetwork/fastc/releases"><img alt="GitHub releases" src="https://img.shields.io/github/release/EveripediaNetwork/fastc.svg?style=flat-square"></a>
