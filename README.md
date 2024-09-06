@@ -1,6 +1,14 @@
 <p align="center">
-    <img src="./misc/logo.svg" alt="Logo" width="300"/>
+    <img src="./misc/fastc.svg" alt="Logo" height="70"/>
 <p>
+
+<div align="center">
+    <h3>
+        <b>Unattended Lightweight Text Classifiers with State-of-the-Art LLM Embeddings</b>
+    </h3>
+</div>
+
+<br>
 
 <p align="center">
     <a href="https://pypi.python.org/pypi/fastc/"><img alt="PyPi" src="https://img.shields.io/pypi/v/fastc.svg?style=flat-square"></a>
