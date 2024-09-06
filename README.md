@@ -1,10 +1,10 @@
 <p align="center">
-    <img src="./misc/fastc.svg" alt="Logo" height="70" />
+    <img src="./misc/fastc.svg" alt="Logo" height="100" />
 <p>
 
 <div align="center">
     <h3>
-        <b>Unattended Lightweight Text Classifiers with SOTA LLM Embeddings</b>
+        <b>Unattended Lightweight Text Classifiers with LLM Embeddings</b>
     </h3>
 </div>
 
